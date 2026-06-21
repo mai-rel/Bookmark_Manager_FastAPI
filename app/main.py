@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response, Query
+from fastapi import FastAPI, HTTPException, Response, Query, status
 from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse,BookmarkNoTagsResponse
 from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
@@ -47,16 +47,19 @@ url=bookmark.url, tags=tags_names)
         return result
 
 
-@app.post("/bookmarks", status_code=201)
+@app.post("/bookmarks", status_code=status.HTTP_201_CREATED)
 def create_bookmark(bookmark: BookmarkCreate):
     with SessionLocal() as db:
         existing = db.query(Bookmark).filter(Bookmark.url == str(bookmark.url)).first()
 
         if existing:
-            return {"message": "bookmark with this url already exist"}
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Bookmark with this URL already exists"
+            )
 
         db_bookmark = Bookmark(title=bookmark.title, url=str(bookmark.url))
-        tags_from_user = bookmark.tags
+        tags_from_user = [tag.lower() for tag in bookmark.tags]
         tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).all()}
         final_tags = []
 
@@ -72,8 +75,18 @@ def create_bookmark(bookmark: BookmarkCreate):
         db_bookmark.tags = final_tags
         db.add(db_bookmark)
         db.commit()
+        db.refresh(db_bookmark)
 
-        return {"message": "Bookmark created"}
+        tag_names = [tag_obj.name for tag_obj in db_bookmark.tags]
+
+        response = BookmarkResponse(title=db_bookmark.title,
+                                    url=db_bookmark.url, tags=tag_names)
+
+        headers = {"Location": f"/bookmarks/{db_bookmark.id}"}
+
+        return response, headers
+
+
 
 
 @app.patch('/bookmarks/{bookmark_id}')
