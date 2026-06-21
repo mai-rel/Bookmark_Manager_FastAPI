@@ -1,11 +1,11 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, constr
 from typing import List
 
 
 class BookmarkCreate(BaseModel):
     url: HttpUrl
-    title: str
-    tags: List[str]
+    title: constr(min_length=1, strip_whitespace=True)
+    tags: set[str] = set()
 
 
 class BookmarkUpdate(BaseModel):
