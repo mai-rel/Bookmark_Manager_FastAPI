@@ -59,11 +59,13 @@ def create_bookmark(bookmark: BookmarkCreate):
             )
 
         db_bookmark = Bookmark(title=bookmark.title, url=str(bookmark.url))
-        tags_from_user = [tag.lower() for tag in bookmark.tags]
-        tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).all()}
+        tags_from_user = {tag.strip().lower() for tag in bookmark.tags}
+        tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name.in_(tags_from_user))}
         final_tags = []
 
         for tag_name in tags_from_user:
+            if not tag_name:
+                continue
             if tag_name in tags_in_db:
                 final_tags.append(tags_in_db[tag_name])
             else:
