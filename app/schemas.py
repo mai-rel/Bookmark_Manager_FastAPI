@@ -10,8 +10,8 @@ class BookmarkCreate(BaseModel):
 
 class BookmarkUpdate(BaseModel):
     url: HttpUrl | None
-    title: str | None
-    tags: List[str] | None
+    title: constr(min_length=1, strip_whitespace=True) | None
+    tags: set[str] | None
 
 
 class BookmarkResponse(BaseModel):
