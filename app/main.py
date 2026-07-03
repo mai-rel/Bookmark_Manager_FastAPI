@@ -23,7 +23,7 @@ def delete_bookmark(bookmark_id: int):
         return Response(status_code=204)
 
 
-@app.get("/bookmarks", response_model = List[ BookmarkResponse])
+@app.get("/bookmarks", response_model = List[BookmarkResponse])
 def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None)):
     with SessionLocal() as db:
 
@@ -104,9 +104,10 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
             db_bookmark.url = str(updated_data.url)
 
         if updated_data.tags is not None:
-            tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).all()}
+            tags_from_user = {tag.strip().lower() for tag in updated_data.tags}
+            tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name_in(tags_from_user))}
             updated_tags = []
-            for tag_name in updated_data.tags:
+            for tag_name in tags_from_user:
                 if tag_name in tags_in_db:
                     updated_tags.append(tags_in_db[tag_name])
                 else:
