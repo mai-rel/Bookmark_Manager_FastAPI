@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Response, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse,BookmarkNoTagsResponse
 from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
@@ -96,7 +97,7 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
     with SessionLocal() as db:
         db_bookmark = db.query(Bookmark).filter(Bookmark.id==bookmark_id).first()
         if not db_bookmark:
-            raise HTTPException(status_code=404, detail="Bookmark not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
         if updated_data.title is not None:
             db_bookmark.title = updated_data.title
@@ -105,7 +106,7 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
         if updated_data.tags is not None:
             tags_from_user = {tag.strip().lower() for tag in updated_data.tags}
-            tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name_in(tags_from_user))}
+            tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name.in_(tags_from_user))}
             updated_tags = []
             for tag_name in tags_from_user:
                 if tag_name in tags_in_db:
@@ -120,10 +121,14 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
         try:
             db.commit()
-            return {'message': "Successfully updated"}
-        except Exception as e:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        except SQLAlchemyError:
             db.rollback()
-            raise HTTPException(status_code=500, detail="Server error")
+            print("Database update failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database error"
+            )
 
 
 @app.get("/tags", response_model = List[TagResponse])
