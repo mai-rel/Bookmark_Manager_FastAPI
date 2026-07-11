@@ -9,9 +9,9 @@ class BookmarkCreate(BaseModel):
 
 
 class BookmarkUpdate(BaseModel):
-    url: HttpUrl | None
-    title: constr(min_length=1, strip_whitespace=True) | None
-    tags: set[str] | None
+    url: HttpUrl | None = None
+    title: constr(min_length=1, strip_whitespace=True) | None = None
+    tags: set[str] | None = None
 
 
 class BookmarkResponse(BaseModel):
