@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, constr
+from pydantic import BaseModel, HttpUrl, constr, ConfigDict
 from typing import List
 
 
@@ -15,26 +15,22 @@ class BookmarkUpdate(BaseModel):
 
 
 class BookmarkResponse(BaseModel):
-    url: HttpUrl
+    id: int
     title: str
+    url: HttpUrl
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BookmarkWithTagsResponse(BookmarkResponse):
     tags: List[str]
-
-    class Config:
-        from_attributes = True
-
 
 
 class TagResponse(BaseModel):
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-class BookmarkNoTagsResponse(BaseModel):
-    title: str
-    url: HttpUrl
 
-    class Config:
-        from_attributes = True
     

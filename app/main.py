@@ -1,30 +1,34 @@
 from fastapi import FastAPI, HTTPException, Response, Query, status
 from sqlalchemy.exc import SQLAlchemyError
-from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse,BookmarkNoTagsResponse
+from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse, BookmarkWithTagsResponse
 from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
 from typing import List
 
-app = FastAPI()
+
+app = FastAPI(title='Bookmark Manager API',
+              description='Учебное приложение для изучения FastAPI',
+              version="1.0.0")
+
 
 @app.on_event("startup")
 def startup():
     init_db()
 
 
-@app.delete("/bookmarks/{bookmark_id}")
+@app.delete("/bookmarks/{bookmark_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bookmark(bookmark_id: int):
     with SessionLocal() as db:
         target_bookmark = db.query(Bookmark).filter(Bookmark.id == bookmark_id).first()
         if not target_bookmark:
-            raise HTTPException(status_code=404, detail="Bookmark not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
         db.delete(target_bookmark)
         db.commit()
-        return Response(status_code=204)
+        return
 
 
-@app.get("/bookmarks", response_model = List[BookmarkResponse])
+@app.get("/bookmarks", response_model = List[BookmarkWithTagsResponse])
 def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None)):
     with SessionLocal() as db:
 
@@ -41,7 +45,7 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
         result = []
         for bookmark in bookmarks:
             tags_names = [tag_obj.name for tag_obj in bookmark.tags]
-            response = BookmarkResponse(title=bookmark.title, 
+            response = BookmarkWithTagsResponse(id=bookmark.id, title=bookmark.title,
 url=bookmark.url, tags=tags_names)
             result.append(response)
 
@@ -82,17 +86,15 @@ def create_bookmark(bookmark: BookmarkCreate):
 
         tag_names = [tag_obj.name for tag_obj in db_bookmark.tags]
 
-        response = BookmarkResponse(title=db_bookmark.title,
+        response = BookmarkWithTagsResponse(id=db_bookmark.id, title=db_bookmark.title,
                                     url=db_bookmark.url, tags=tag_names)
 
-        headers = {"Location": f"/bookmarks/{db_bookmark.id}"}
-
-        return response, headers
+        return response
 
 
 
 
-@app.patch('/bookmarks/{bookmark_id}')
+@app.patch('/bookmarks/{bookmark_id}', status_code=status.HTTP_204_NO_CONTENT)
 def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
     with SessionLocal() as db:
         db_bookmark = db.query(Bookmark).filter(Bookmark.id==bookmark_id).first()
@@ -121,7 +123,7 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
         try:
             db.commit()
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
+            return
         except SQLAlchemyError:
             db.rollback()
             print("Database update failed")
@@ -139,14 +141,13 @@ def get_tags():
 
 
 @app.get("/tags/{tag_name}/bookmarks", response_model = 
-List[BookmarkNoTagsResponse])
+List[BookmarkResponse])
 def get_bookmarks_by_tag(tag_name: str):
     with SessionLocal() as db:
         tag_obj = db.query(Tag).filter(Tag.name==tag_name).first()
         if not tag_obj:
             return []
 
-        bookmarks_by_tag = [BookmarkNoTagsResponse(title=bookmark_obj.title, url= 
-bookmark_obj.url) 
-for bookmark_obj in  tag_obj.bookmarks]
+        bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
+bookmark_obj.url) for bookmark_obj in  tag_obj.bookmarks]
         return bookmarks_by_tag
