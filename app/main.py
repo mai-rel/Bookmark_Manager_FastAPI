@@ -108,6 +108,9 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
         if updated_data.tags is not None:
             tags_from_user = {tag.strip().lower() for tag in updated_data.tags}
+            if '' in tags_from_user:
+                tags_from_user.remove('')
+
             tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name.in_(tags_from_user))}
             updated_tags = []
             for tag_name in tags_from_user:
