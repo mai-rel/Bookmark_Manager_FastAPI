@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Table, ForeignKey
+from sqlalchemy import Column, Table, ForeignKey
 from app.db import Base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 
 bookmark_tags = Table(
@@ -14,24 +14,26 @@ bookmark_tags = Table(
 class Bookmark(Base):
     __tablename__ = "bookmarks"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String)
-    url = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str]
+    url: Mapped[str]
 
-    tags = relationship(
-        "Tag",
+    tags: Mapped[list["Tag"]] = relationship(
         secondary=bookmark_tags,
-        back_populates="bookmarks"
+        back_populates="bookmarks",
     )
+
 
 
 class Tag(Base):
     __tablename__ = "tags"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    id: Mapped[int] =  mapped_column(primary_key=True, index=True)
+    name: Mapped[str] =  mapped_column(unique=True, index=True)
 
-    bookmarks = relationship("Bookmark", secondary=bookmark_tags, 
-back_populates = 'tags')
+    bookmarks: Mapped[list["Bookmark"]] = relationship(
+        secondary=bookmark_tags,
+        back_populates="tags",
+    )
 
 
