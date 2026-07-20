@@ -96,6 +96,31 @@ def test_tags_partial_updates(reset_db, update_data):
     assert db_bookmark.url == old_data["url"]
 
 
+
+def test_delete_bookmark_removes_unused_tags(reset_db):
+    response_from_first_post = client.post('/bookmarks', json={'title': 'FastAPI',
+                                                'url': "https://fastapi.com/",
+                                                'tags': ['api', 'python', 'dev']})
+    assert response_from_first_post.status_code == 201
+    response_from_second_post = client.post('/bookmarks', json={'title': 'SQLAlchemy',
+                                               'url': "https://sqlalchemy.com/",
+                                               'tags': ['python', 'database']})
+    assert response_from_second_post.status_code == 201
+
+    del_bookmark_id = response_from_first_post.json()["id"]
+
+    response = client.delete(f'/bookmarks/{del_bookmark_id}')
+    assert response.status_code == 204
+
+    with SessionLocal() as db:
+        assert db.get(Bookmark, del_bookmark_id) is None
+        assert db.query(Tag).filter_by(name='dev').first() is None
+        assert db.query(Tag).filter_by(name='api').first() is None
+
+        db_tags = [tag_obj.name for tag_obj in db.query(Tag).all()]
+        assert set(db_tags) == {'python', 'database'}
+
+
 def test_get_tags_if_empty(reset_db):
     response = client.get('/tags')
     assert response.status_code == 200
