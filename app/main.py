@@ -124,11 +124,17 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 @app.delete("/bookmarks/{bookmark_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bookmark(bookmark_id: int):
     with SessionLocal() as db:
-        target_bookmark = db.query(Bookmark).get(bookmark_id)
+        target_bookmark = db.get(Bookmark, bookmark_id)
         if not target_bookmark:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
+        bookmark_tags = target_bookmark.tags
         db.delete(target_bookmark)
+        db.flush()
+
+        for tag in bookmark_tags:
+            if not tag.bookmarks:
+                db.delete(tag)
         db.commit()
         return
 
