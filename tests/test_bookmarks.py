@@ -144,6 +144,33 @@ def test_get_multiple_bookmarks(created_bookmarks):
     assert created_bookmarks == actual_bookmarks
 
 
+@pytest.mark.parametrize('query_params', [{'query_title': 'api'}, {'query_title': 'python'},
+                                          {'query_tags': ['python']}, {'query_tags': ['Python']},
+                                          {'query_title': 'api', 'query_tags': ['database']},
+                                          {'query_tags': ['not_exist']}, {'query_tags': ['api', 'database']}])
+
+def test_get_bookmarks_with_query_params(query_params, created_bookmarks):
+    expected_bookmarks = set()
+    query_title = query_params.get('query_title', None)
+    query_tags = query_params.get('query_tags', None)
+
+    for bookmark in created_bookmarks:
+        if query_title and query_title.lower() in bookmark['title'].lower():
+            if not query_tags or any(tag.lower() in bookmark['tags'] for tag in query_tags):
+                expected_bookmarks.add((bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])))
+
+        elif not query_title:
+            if query_tags and any(tag.lower() in bookmark['tags'] for tag in query_tags):
+                expected_bookmarks.add((bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])))
+
+    response = client.get('/bookmarks', params=query_params)
+    assert response.status_code == 200
+
+    data = response.json()
+    actual_bookmarks = {(bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])) for bookmark in data}
+    assert expected_bookmarks == actual_bookmarks
+
+
 #PATCH
 
 @pytest.mark.parametrize("update_data", [
