@@ -68,6 +68,7 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
             query = query.filter(Bookmark.title.ilike(f'%{query_title}%'))
 
         if query_tags:
+            query_tags = [tag.lower() for tag in query_tags]
             query = query.filter(Bookmark.tags.any(Tag.name.in_(query_tags)))
 
         bookmarks = query.all()
