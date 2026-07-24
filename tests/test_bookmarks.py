@@ -4,6 +4,7 @@ import pytest
 from app.db import Base, engine, SessionLocal
 from app.models import Bookmark
 from  pydantic import HttpUrl
+import time
 
 
 client = TestClient(app)
@@ -79,6 +80,7 @@ def test_create_bookmark_with_existing_url(reset_db):
 def test_create_bookmark_with_invalid_data(reset_db, invalid_data_for_post):
     response = client.post("/bookmarks", json=invalid_data_for_post)
     assert response.status_code == 422
+
 
 
 #GET
@@ -260,7 +262,34 @@ def test_delete_bookmark_if_not_exists(reset_db):
     assert response.status_code == 404
     assert response.json() == {"detail": "Bookmark not found"}
 
-    
+
+
+def test_bookmark_timestamps_are_set_on_create_and_updated_on_patch(reset_db):
+    response_from_post = client.post('/bookmarks', json={"title": "FastAPI",
+                                               "url": "https://fastapi.com/",
+                                               "tags": ["python", "dev", "api"]})
+
+    assert response_from_post.status_code == 201
+
+    created_bookmark = response_from_post.json()
+    bookmark_id = created_bookmark['id']
+    assert 'created_at' in created_bookmark and 'updated_at' in created_bookmark
+    assert  created_bookmark['created_at'] == created_bookmark['updated_at']
+
+    with SessionLocal() as db:
+        db_bookmark = db.get(Bookmark, bookmark_id)
+        assert hasattr(db_bookmark, 'created_at') and hasattr(db_bookmark, 'updated_at')
+        assert db_bookmark.created_at == db_bookmark.updated_at
+
+    time.sleep(3)
+
+    response_from_patch = client.patch(f'/bookmarks/{bookmark_id}', json={'title': 'Updated FastAPI'})
+    assert response_from_patch.status_code == 204
+
+    with SessionLocal() as db:
+        updated_bookmark = db.get(Bookmark, bookmark_id)
+        assert db_bookmark.created_at == updated_bookmark.created_at
+        assert db_bookmark.updated_at != updated_bookmark.updated_at
 
 
 
