@@ -4,6 +4,7 @@ from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResp
 from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
 from typing import List
+from datetime import timezone, datetime
 
 
 app = FastAPI(title='Bookmark Manager API',
@@ -53,7 +54,8 @@ def create_bookmark(bookmark: BookmarkCreate):
         tag_names = [tag_obj.name for tag_obj in db_bookmark.tags]
 
         response = BookmarkWithTagsResponse(id=db_bookmark.id, title=db_bookmark.title,
-                                            url=db_bookmark.url, tags=tag_names)
+                                            url=db_bookmark.url, tags=tag_names, created_at=db_bookmark.created_at,
+                                            updated_at=db_bookmark.updated_at)
 
         return response
 
@@ -77,7 +79,7 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
         for bookmark in bookmarks:
             tags_names = [tag_obj.name for tag_obj in bookmark.tags]
             response = BookmarkWithTagsResponse(id=bookmark.id, title=bookmark.title,
-url=bookmark.url, tags=tags_names)
+url=bookmark.url, tags=tags_names, created_at=bookmark.created_at, updated_at=bookmark.updated_at)
             result.append(response)
 
         return result
@@ -158,5 +160,5 @@ def get_bookmarks_by_tag(tag_name: str):
             return []
 
         bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
-bookmark_obj.url) for bookmark_obj in tag_obj.bookmarks]
+bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
         return bookmarks_by_tag

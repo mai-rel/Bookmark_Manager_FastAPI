@@ -1,5 +1,6 @@
 from pydantic import BaseModel, HttpUrl, constr, ConfigDict
 from typing import List
+from datetime import datetime
 
 
 class BookmarkCreate(BaseModel):
@@ -18,6 +19,8 @@ class BookmarkResponse(BaseModel):
     id: int
     title: str
     url: HttpUrl
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

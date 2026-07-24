@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Table, ForeignKey
+from sqlalchemy import Column, Table, ForeignKey, DateTime, func
 from app.db import Base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from datetime import datetime
 
 
 bookmark_tags = Table(
@@ -17,6 +18,8 @@ class Bookmark(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str]
     url: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     tags: Mapped[list["Tag"]] = relationship(
         secondary=bookmark_tags,
