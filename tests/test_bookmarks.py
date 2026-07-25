@@ -293,6 +293,69 @@ def test_bookmark_timestamps_are_set_on_create_and_updated_on_patch(reset_db):
 
 
 
+@pytest.mark.parametrize("sorting_params", [{"sort": "random"},
+                                           {"sort": "title", "order": "abc"}])
+def test_sorting_bookmarks_not_valid_params(created_bookmarks, sorting_params):
+    response = client.get('/bookmarks', params=sorting_params)
+
+    assert response.status_code == 400
+    assert "detail" in response.json()
+
+
+
+@pytest.mark.parametrize("sorting_params", [{"sort": "title"},
+                                            {"sort": "title", "order": "desc"}])
+def test_correct_sorting_bookmarks_by_title(created_bookmarks, sorting_params):
+    expected_bookmarks = [(bookmark["title"], bookmark["url"]) for bookmark in created_bookmarks]
+    flag = sorting_params.get("order", None) == "desc"
+    expected_bookmarks.sort(reverse=flag)
+
+    response = client.get('/bookmarks', params=sorting_params)
+    assert response.status_code == 200
+
+    data = response.json()
+    actual_bookmarks = [(bookmark["title"], bookmark["url"]) for bookmark in data]
+
+    assert expected_bookmarks == actual_bookmarks
+
+
+@pytest.mark.parametrize("sorting_params", [{"sort": "created_at"},
+                                            {"sort": "created_at", "order": "desc"},
+                                            {"sort": "updated_at"}])
+
+def test_sort_bookmarks_by_created_at_and_updated_at(created_bookmarks, sorting_params):
+    expected_bookmarks = [(bookmark["title"], bookmark["url"]) for bookmark in created_bookmarks]
+
+    if sorting_params["sort"] == 'updated_at':
+        with SessionLocal() as db:
+            bookmark_for_update = db.query(Bookmark).filter(Bookmark.url == 'https://fastapi.com/').first()
+            bookmark_id = bookmark_for_update.id
+
+        time.sleep(1)
+
+        response_from_patch = client.patch(f'/bookmarks/{bookmark_id}', json={"title": "Updated FastAPI"})
+        assert response_from_patch.status_code == 204
+
+        expected_bookmarks.remove(('FastAPI', 'https://fastapi.com/'))
+        expected_bookmarks.append(('Updated FastAPI', 'https://fastapi.com/'))
+
+    if sorting_params.get("order", None) == 'desc':
+        expected_bookmarks.reverse()
+
+    response = client.get("bookmarks/", params=sorting_params)
+    assert response.status_code == 200
+
+    actual_bookmarks = [(bookmark["title"], bookmark["url"]) for bookmark in response.json()]
+    assert expected_bookmarks == actual_bookmarks
+
+
+
+
+
+
+
+
+
 
 
 
