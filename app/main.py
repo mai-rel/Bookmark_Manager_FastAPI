@@ -61,9 +61,14 @@ def create_bookmark(bookmark: BookmarkCreate):
 
 
 @app.get("/bookmarks", response_model = List[BookmarkWithTagsResponse])
-def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None)):
-    with SessionLocal() as db:
+def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None),
+                  sort: str| None = None, order: str = 'asc'):
 
+    sortable_fields = {'title': Bookmark.title,
+                       'created_at': Bookmark.created_at,
+                       'updated_at': Bookmark.updated_at}
+
+    with SessionLocal() as db:
         query = db.query(Bookmark)
 
         if query_title:
@@ -72,6 +77,19 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
         if query_tags:
             query_tags = [tag.lower() for tag in query_tags]
             query = query.filter(Bookmark.tags.any(Tag.name.in_(query_tags)))
+
+        if sort:
+            field = sortable_fields.get(sort, None)
+            if field is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wrong field for sorting")
+
+            if order not in ('asc', 'desc'):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wrong sorting direction")
+
+            if order == 'desc':
+                query = query.order_by(field.desc(), Bookmark.id.desc())
+            else:
+                query = query.order_by(field, Bookmark.id)
 
         bookmarks = query.all()
 
@@ -162,3 +180,5 @@ def get_bookmarks_by_tag(tag_name: str):
         bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
 bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
         return bookmarks_by_tag
+
+
