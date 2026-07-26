@@ -5,6 +5,7 @@ from app.db import Base, engine, SessionLocal
 from app.models import Bookmark
 from  pydantic import HttpUrl
 import time
+from sqlalchemy import select
 
 
 client = TestClient(app)
@@ -37,7 +38,7 @@ def test_create_bookmark_success_with_tags_or_without(reset_db, create_data):
         assert set(data["tags"]) == set(create_data["tags"])
 
     with SessionLocal() as db:
-        bookmarks = db.query(Bookmark).all()
+        bookmarks = db.execute(select(Bookmark)).scalars().all()
         assert len(bookmarks) == 1
 
         bookmark = bookmarks[0]
@@ -65,7 +66,7 @@ def test_create_bookmark_with_existing_url(reset_db):
     assert response.status_code == 409
 
     with SessionLocal() as db:
-        bookmarks = db.query(Bookmark).filter(Bookmark.url == 'https://fastapi.com/').all()
+        bookmarks = db.execute(select(Bookmark).where(Bookmark.url == 'https://fastapi.com/')).scalars().all()
         assert len(bookmarks) == 1
 
 
@@ -195,7 +196,7 @@ def test_partial_updates(reset_db, update_data):
     assert response.content == b""
 
     with SessionLocal() as db:
-        db_bookmark = db.query(Bookmark).filter(Bookmark.id==old_data['id']).first()
+        db_bookmark = db.execute(select(Bookmark).where(Bookmark.id == old_data['id'])).scalar_one()
 
     for key in ['title', 'url']:
         if key not in update_data:
@@ -233,7 +234,7 @@ def test_patch_returns_422_for_invalid_data(reset_db, invalid_data_for_patch):
     assert "detail" in response.json()
 
     with SessionLocal() as db:
-        db_bookmark = db.query(Bookmark).filter(Bookmark.id == old_data['id']).first()
+        db_bookmark = db.execute(select(Bookmark).where(Bookmark.id == old_data['id'])).scalar_one()
 
     assert db_bookmark.title == old_data["title"]
     assert db_bookmark.url == old_data["url"]
@@ -254,7 +255,7 @@ def test_delete_bookmark_if_exists(reset_db):
     assert response.content == b""
 
     with SessionLocal() as db:
-        assert db.query(Bookmark).filter(Bookmark.id==bookmark_id).first() is None
+        assert db.execute(select(Bookmark).where(Bookmark.id == bookmark_id)).scalar_one_or_none() is None
 
 
 def test_delete_bookmark_if_not_exists(reset_db):
@@ -328,7 +329,7 @@ def test_sort_bookmarks_by_created_at_and_updated_at(created_bookmarks, sorting_
 
     if sorting_params["sort"] == 'updated_at':
         with SessionLocal() as db:
-            bookmark_for_update = db.query(Bookmark).filter(Bookmark.url == 'https://fastapi.com/').first()
+            bookmark_for_update = db.execute(select(Bookmark).where(Bookmark.url == 'https://fastapi.com/')).scalar_one()
             bookmark_id = bookmark_for_update.id
 
         time.sleep(1)

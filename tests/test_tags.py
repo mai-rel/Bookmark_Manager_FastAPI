@@ -4,6 +4,7 @@ import pytest
 from app.db import Base, engine, SessionLocal
 from app.models import Bookmark, Tag
 from collections import defaultdict
+from sqlalchemy import select
 
 
 client = TestClient(app)
@@ -32,7 +33,7 @@ def test_create_bookmark_normalizes_tags(reset_db, tags_for_post):
     expected_count = len(expected_tag_names)
 
     with SessionLocal() as db:
-        db_bookmark = db.query(Bookmark).get(data["id"])
+        db_bookmark = db.get(Bookmark, data["id"])
         assert len(db_bookmark.tags) == expected_count
 
         actual_names = {tag_obj.name for tag_obj in db_bookmark.tags}
@@ -55,14 +56,14 @@ def test_create_bookmarks_with_same_tags_does_not_duplicate_tags(reset_db):
     assert response2.status_code == 201
 
     with SessionLocal() as db:
-        tags = db.query(Tag).all()
+        tags = db.execute(select(Tag)).scalars().all()
         assert len(tags) == 3
         assert {tag.name for tag in tags} == {"python", "api", "database"}
 
-        bookmark_fastapi = db.query(Bookmark).get(response1.json()["id"])
+        bookmark_fastapi = db.get(Bookmark, response1.json()["id"])
         assert {tag.name for tag in bookmark_fastapi.tags} == {"python", "api"}
 
-        bookmark_sql = db.query(Bookmark).get(response2.json()["id"])
+        bookmark_sql = db.get(Bookmark, response2.json()["id"])
         assert {tag.name for tag in bookmark_sql.tags} == {"python", "database"}
 
 
@@ -88,7 +89,7 @@ def test_tags_partial_updates(reset_db, update_data):
     expected_data = {tag.strip().lower() for tag in update_data['tags'] if tag.strip()}
 
     with SessionLocal() as db:
-        db_bookmark = db.query(Bookmark).get(bookmark_id)
+        db_bookmark = db.get(Bookmark, bookmark_id)
         db_tags = [tag_obj.name for tag_obj in db_bookmark.tags]
 
     assert expected_data == set(db_tags)
@@ -114,10 +115,10 @@ def test_delete_bookmark_removes_unused_tags(reset_db):
 
     with SessionLocal() as db:
         assert db.get(Bookmark, del_bookmark_id) is None
-        assert db.query(Tag).filter_by(name='dev').first() is None
-        assert db.query(Tag).filter_by(name='api').first() is None
+        assert db.execute(select(Tag).where(Tag.name == 'dev')).scalar_one_or_none() is None
+        assert db.execute(select(Tag).where(Tag.name == 'api')).scalar_one_or_none() is None
 
-        db_tags = [tag_obj.name for tag_obj in db.query(Tag).all()]
+        db_tags = [tag_obj.name for tag_obj in db.execute(select(Tag)).scalars().all()]
         assert set(db_tags) == {'python', 'database'}
 
 
@@ -127,7 +128,7 @@ def test_get_tags_if_empty(reset_db):
     assert response.json() == []
 
     with SessionLocal() as db:
-        assert db.query(Tag).all() == []
+        assert db.execute(select(Tag)).scalars().all() == []
 
 
 

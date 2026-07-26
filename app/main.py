@@ -5,6 +5,7 @@ from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
 from typing import List
 from datetime import timezone, datetime
+from sqlalchemy import select
 
 
 app = FastAPI(title='Bookmark Manager API',
@@ -22,7 +23,7 @@ def startup():
 @app.post("/bookmarks", status_code=status.HTTP_201_CREATED)
 def create_bookmark(bookmark: BookmarkCreate):
     with SessionLocal() as db:
-        existing = db.query(Bookmark).filter_by(url=str(bookmark.url)).first()
+        existing = db.execute(select(Bookmark).where(Bookmark.url == str(bookmark.url))).scalar_one_or_none()
 
         if existing:
             raise HTTPException(
@@ -106,7 +107,7 @@ url=bookmark.url, tags=tags_names, created_at=bookmark.created_at, updated_at=bo
 @app.patch('/bookmarks/{bookmark_id}', status_code=status.HTTP_204_NO_CONTENT)
 def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
     with SessionLocal() as db:
-        db_bookmark = db.query(Bookmark).get(bookmark_id)
+        db_bookmark = db.get(Bookmark, bookmark_id)
         if not db_bookmark:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
@@ -166,14 +167,14 @@ def delete_bookmark(bookmark_id: int):
 @app.get("/tags", response_model = List[TagResponse])
 def get_tags():
     with SessionLocal() as db:
-        all_tags = db.query(Tag).all()
+        all_tags = db.execute(select(Tag)).scalars().all()
         return all_tags
 
 
 @app.get("/tags/{tag_name}/bookmarks", response_model=List[BookmarkResponse])
 def get_bookmarks_by_tag(tag_name: str):
     with SessionLocal() as db:
-        tag_obj = db.query(Tag).filter_by(name=tag_name).first()
+        tag_obj = db.execute(select(Tag).where(Tag.name == tag_name)).scalar_one_or_none()
         if not tag_obj:
             return []
 
