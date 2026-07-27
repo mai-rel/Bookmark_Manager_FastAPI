@@ -6,6 +6,7 @@ from app.db import SessionLocal, init_db
 from typing import List
 from datetime import timezone, datetime
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 
 app = FastAPI(title='Bookmark Manager API',
@@ -70,14 +71,14 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
                        'updated_at': Bookmark.updated_at}
 
     with SessionLocal() as db:
-        query = db.query(Bookmark)
+        statement = select(Bookmark).options(selectinload(Bookmark.tags))
 
         if query_title:
-            query = query.filter(Bookmark.title.ilike(f'%{query_title}%'))
+            statement = statement.where(Bookmark.title.ilike(f'%{query_title}%'))
 
         if query_tags:
             query_tags = [tag.lower() for tag in query_tags]
-            query = query.filter(Bookmark.tags.any(Tag.name.in_(query_tags)))
+            statement = statement.where(Bookmark.tags.any(Tag.name.in_(query_tags)))
 
         if sort:
             field = sortable_fields.get(sort, None)
@@ -88,11 +89,11 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wrong sorting direction")
 
             if order == 'desc':
-                query = query.order_by(field.desc(), Bookmark.id.desc())
+                statement = statement.order_by(field.desc(), Bookmark.id.desc())
             else:
-                query = query.order_by(field, Bookmark.id)
+                statement = statement.order_by(field, Bookmark.id)
 
-        bookmarks = query.all()
+        bookmarks = db.execute(statement).scalars().all()
 
         result = []
         for bookmark in bookmarks:
