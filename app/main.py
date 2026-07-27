@@ -2,10 +2,11 @@ from fastapi import FastAPI, HTTPException, Response, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse, BookmarkWithTagsResponse
 from app.models import Bookmark, Tag
-from app.db import SessionLocal, init_db
+from app.db import SessionLocal, init_db, async_session
 from typing import List
 from datetime import timezone, datetime
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 
 app = FastAPI(title='Bookmark Manager API',
@@ -144,20 +145,23 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
 
 @app.delete("/bookmarks/{bookmark_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_bookmark(bookmark_id: int):
-    with SessionLocal() as db:
-        target_bookmark = db.get(Bookmark, bookmark_id)
+async def delete_bookmark(bookmark_id: int):
+    async with async_session() as db:
+        result = await db.execute(select(Bookmark).options(selectinload(Bookmark.tags)).where(Bookmark.id == bookmark_id))
+        target_bookmark = result.scalar_one_or_none()
         if not target_bookmark:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
         bookmark_tags = target_bookmark.tags
-        db.delete(target_bookmark)
-        db.flush()
+        await db.delete(target_bookmark)
+        await db.flush()
 
         for tag in bookmark_tags:
-            if not tag.bookmarks:
-                db.delete(tag)
-        db.commit()
+            result = await db.execute(select(Tag).where(Tag.name == tag.name, Tag.bookmarks.any() == False))
+            del_tag = result.scalar_one_or_none()
+            if del_tag:
+                await db.delete(del_tag)
+        await db.commit()
         return
 
 
@@ -165,21 +169,24 @@ def delete_bookmark(bookmark_id: int):
 #Tags
 
 @app.get("/tags", response_model = List[TagResponse])
-def get_tags():
-    with SessionLocal() as db:
-        all_tags = db.execute(select(Tag)).scalars().all()
+async def get_tags():
+    async with async_session() as db:
+        result = await db.execute(select(Tag))
+        all_tags = result.scalars().all()
         return all_tags
 
 
 @app.get("/tags/{tag_name}/bookmarks", response_model=List[BookmarkResponse])
-def get_bookmarks_by_tag(tag_name: str):
-    with SessionLocal() as db:
-        tag_obj = db.execute(select(Tag).where(Tag.name == tag_name)).scalar_one_or_none()
+async def get_bookmarks_by_tag(tag_name: str):
+    async with async_session() as db:
+        result = await db.execute(select(Tag).options(selectinload(Tag.bookmarks)).where(Tag.name == tag_name))
+        tag_obj = result.scalar_one_or_none()
         if not tag_obj:
             return []
 
-        bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
-bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
-        return bookmarks_by_tag
+#         bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
+# bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
+#         return bookmarks_by_tag
+        return tag_obj.bookmarks
 
 
