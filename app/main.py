@@ -22,9 +22,10 @@ def startup():
 #Bookmarks
 
 @app.post("/bookmarks", status_code=status.HTTP_201_CREATED)
-def create_bookmark(bookmark: BookmarkCreate):
-    with SessionLocal() as db:
-        existing = db.execute(select(Bookmark).where(Bookmark.url == str(bookmark.url))).scalar_one_or_none()
+async def create_bookmark(bookmark: BookmarkCreate):
+    async with async_session() as db:
+        result = await db.execute(select(Bookmark).where(Bookmark.url == str(bookmark.url)))
+        existing = result.scalar_one_or_none()
 
         if existing:
             raise HTTPException(
@@ -34,26 +35,26 @@ def create_bookmark(bookmark: BookmarkCreate):
 
         db_bookmark = Bookmark(title=bookmark.title, url=str(bookmark.url))
         tags_from_user = {tag.strip().lower() for tag in bookmark.tags if tag.strip()}
-        tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name.in_(tags_from_user))}
+        result = await db.execute(select(Tag).where(Tag.name.in_(tags_from_user)))
+        tags_in_db = {tag_obj.name: tag_obj for tag_obj in result.scalars().all()}
         final_tags = []
 
         for tag_name in tags_from_user:
-            if not tag_name:
-                continue
             if tag_name in tags_in_db:
                 final_tags.append(tags_in_db[tag_name])
             else:
                 new_tag = Tag(name=tag_name)
                 db.add(new_tag)
-                db.flush()
                 final_tags.append(new_tag)
+
+        await db.flush()
 
         db_bookmark.tags = final_tags
         db.add(db_bookmark)
-        db.commit()
-        db.refresh(db_bookmark)
+        await db.commit()
+        await db.refresh(db_bookmark)
 
-        tag_names = [tag_obj.name for tag_obj in db_bookmark.tags]
+        tag_names = [tag_obj.name for tag_obj in final_tags]
 
         response = BookmarkWithTagsResponse(id=db_bookmark.id, title=db_bookmark.title,
                                             url=db_bookmark.url, tags=tag_names, created_at=db_bookmark.created_at,
@@ -63,22 +64,23 @@ def create_bookmark(bookmark: BookmarkCreate):
 
 
 @app.get("/bookmarks", response_model = List[BookmarkWithTagsResponse])
-def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None),
+async def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None),
                   sort: str| None = None, order: str = 'asc'):
 
     sortable_fields = {'title': Bookmark.title,
                        'created_at': Bookmark.created_at,
                        'updated_at': Bookmark.updated_at}
 
-    with SessionLocal() as db:
-        query = db.query(Bookmark)
+    async with async_session() as db:
+        statement = select(Bookmark).options(selectinload(Bookmark.tags))
 
         if query_title:
-            query = query.filter(Bookmark.title.ilike(f'%{query_title}%'))
+            statement = statement.where(Bookmark.title.ilike(f'%{query_title}%'))
+
 
         if query_tags:
             query_tags = [tag.lower() for tag in query_tags]
-            query = query.filter(Bookmark.tags.any(Tag.name.in_(query_tags)))
+            statement = statement.where(Bookmark.tags.any(Tag.name.in_(query_tags)))
 
         if sort:
             field = sortable_fields.get(sort, None)
@@ -89,26 +91,28 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wrong sorting direction")
 
             if order == 'desc':
-                query = query.order_by(field.desc(), Bookmark.id.desc())
+                statement = statement.order_by(field.desc(), Bookmark.id.desc())
             else:
-                query = query.order_by(field, Bookmark.id)
+                statement = statement.order_by(field, Bookmark.id)
 
-        bookmarks = query.all()
+        result = await db.execute(statement)
+        bookmarks = result.scalars().all()
 
-        result = []
+        response_bookmarks = []
         for bookmark in bookmarks:
             tags_names = [tag_obj.name for tag_obj in bookmark.tags]
             response = BookmarkWithTagsResponse(id=bookmark.id, title=bookmark.title,
 url=bookmark.url, tags=tags_names, created_at=bookmark.created_at, updated_at=bookmark.updated_at)
-            result.append(response)
+            response_bookmarks.append(response)
 
-        return result
+        return response_bookmarks
 
 
 @app.patch('/bookmarks/{bookmark_id}', status_code=status.HTTP_204_NO_CONTENT)
-def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
-    with SessionLocal() as db:
-        db_bookmark = db.get(Bookmark, bookmark_id)
+async def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
+    async with async_session() as db:
+        result = await db.execute(select(Bookmark).options(selectinload(Bookmark.tags)).where(Bookmark.id == bookmark_id))
+        db_bookmark = result.scalar_one_or_none()
         if not db_bookmark:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
 
@@ -119,7 +123,8 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
 
         if updated_data.tags is not None:
             tags_from_user = {tag.strip().lower() for tag in updated_data.tags if tag.strip()}
-            tags_in_db = {tag_obj.name: tag_obj for tag_obj in db.query(Tag).filter(Tag.name.in_(tags_from_user))}
+            result = await db.execute(select(Tag).where(Tag.name.in_(tags_from_user)))
+            tags_in_db = {tag_obj.name: tag_obj for tag_obj in result.scalars().all()}
             updated_tags = []
             for tag_name in tags_from_user:
                 if tag_name in tags_in_db:
@@ -127,16 +132,16 @@ def update_bookmark(bookmark_id: int, updated_data: BookmarkUpdate):
                 else:
                     new_tag = Tag(name=tag_name)
                     db.add(new_tag)
-                    db.flush()
                     updated_tags.append(new_tag)
 
+            await db.flush()
             db_bookmark.tags = updated_tags
 
         try:
-            db.commit()
+            await db.commit()
             return
         except SQLAlchemyError:
-            db.rollback()
+            await db.rollback()
             print("Database update failed")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -184,9 +189,6 @@ async def get_bookmarks_by_tag(tag_name: str):
         if not tag_obj:
             return []
 
-#         bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
-# bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
-#         return bookmarks_by_tag
         return tag_obj.bookmarks
 
 
