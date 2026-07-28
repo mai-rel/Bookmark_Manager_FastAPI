@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 client = TestClient(app)
 
+
 @pytest.fixture(autouse=True)
 def reset_db():
     Base.metadata.drop_all(bind=engine)
@@ -20,11 +21,10 @@ def reset_db():
     ["PYTHON", "Dev", "api", "DEV ", " dev"],
     ['', '   ']
 ])
-
 def test_create_bookmark_normalizes_tags(reset_db, tags_for_post):
     response = client.post('/bookmarks', json={"title": "FastAPI",
-                                    "url": "https://fastapi.com/",
-                                    "tags": tags_for_post})
+                                               "url": "https://fastapi.com/",
+                                               "tags": tags_for_post})
 
     assert response.status_code == 201
     data = response.json()
@@ -73,8 +73,6 @@ def test_create_bookmarks_with_same_tags_does_not_duplicate_tags(reset_db):
     {"tags": ['Python']},
     {"tags": ['fastapi', '    ', 'tests']}
 ])
-
-
 def test_tags_partial_updates(reset_db, update_data):
     response_from_post = client.post('/bookmarks', json={'title': "FastAPI",
                                                          'url': "https://fastapi.com/",
@@ -97,15 +95,15 @@ def test_tags_partial_updates(reset_db, update_data):
     assert db_bookmark.url == old_data["url"]
 
 
-
 def test_delete_bookmark_removes_unused_tags(reset_db):
     response_from_first_post = client.post('/bookmarks', json={'title': 'FastAPI',
-                                                'url': "https://fastapi.com/",
-                                                'tags': ['api', 'python', 'dev']})
+                                                               'url': "https://fastapi.com/",
+                                                               'tags': ['api', 'python', 'dev']})
     assert response_from_first_post.status_code == 201
     response_from_second_post = client.post('/bookmarks', json={'title': 'SQLAlchemy',
-                                               'url': "https://sqlalchemy.com/",
-                                               'tags': ['python', 'database']})
+                                                                'url': "https://sqlalchemy.com/",
+                                                                'tags': ['python', 'database']})
+
     assert response_from_second_post.status_code == 201
 
     del_bookmark_id = response_from_first_post.json()["id"]
@@ -129,7 +127,6 @@ def test_get_tags_if_empty(reset_db):
 
     with SessionLocal() as db:
         assert db.execute(select(Tag)).scalars().all() == []
-
 
 
 @pytest.fixture
@@ -157,7 +154,6 @@ def test_get_all_unique_tags_from_bookmarks(expected_tags_from_created_bookmarks
     assert expected_tags_from_created_bookmarks == {tag["name"] for tag in data}
 
 
-
 def test_get_boomkarks_by_not_existing_tag(reset_db):
     response = client.get('/tags/python/bookmarks')
     assert response.status_code == 200
@@ -181,7 +177,6 @@ def expected_bookmarks_by_tags(reset_db):
     return expected_data_by_tags
 
 
-
 def test_get_boomkarks_by_existing_tags(expected_bookmarks_by_tags):
 
     for tag, expected_bookmarks in expected_bookmarks_by_tags.items():
@@ -193,12 +188,3 @@ def test_get_boomkarks_by_existing_tags(expected_bookmarks_by_tags):
 
         actual_bookmarks = {(bookmark["title"], bookmark["url"]) for bookmark in data}
         assert expected_bookmarks == actual_bookmarks
-
-
-
-
-
-
-
-
-
