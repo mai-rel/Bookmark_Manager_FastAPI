@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException, Response, Query, status
+from fastapi import FastAPI, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
-from app.schemas import BookmarkCreate,BookmarkUpdate, BookmarkResponse, TagResponse, BookmarkWithTagsResponse
+from app.schemas import BookmarkCreate, BookmarkUpdate, BookmarkResponse, TagResponse, BookmarkWithTagsResponse
 from app.models import Bookmark, Tag
 from app.db import SessionLocal, init_db
 from typing import List
-from datetime import timezone, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -62,9 +61,9 @@ def create_bookmark(bookmark: BookmarkCreate):
         return response
 
 
-@app.get("/bookmarks", response_model = List[BookmarkWithTagsResponse])
-def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = Query(None),
-                  sort: str| None = None, order: str = 'asc'):
+@app.get("/bookmarks", response_model=List[BookmarkWithTagsResponse])
+def get_bookmarks(query_title: str | None = None, query_tags: List[str] | None = Query(None),
+                  sort: str | None = None, order: str = 'asc'):
 
     sortable_fields = {'title': Bookmark.title,
                        'created_at': Bookmark.created_at,
@@ -98,8 +97,12 @@ def get_bookmarks(query_title: str| None = None, query_tags: List[str] | None = 
         result = []
         for bookmark in bookmarks:
             tags_names = [tag_obj.name for tag_obj in bookmark.tags]
-            response = BookmarkWithTagsResponse(id=bookmark.id, title=bookmark.title,
-url=bookmark.url, tags=tags_names, created_at=bookmark.created_at, updated_at=bookmark.updated_at)
+            response = BookmarkWithTagsResponse(id=bookmark.id,
+                                                title=bookmark.title,
+                                                url=bookmark.url,
+                                                tags=tags_names,
+                                                created_at=bookmark.created_at,
+                                                updated_at=bookmark.updated_at)
             result.append(response)
 
         return result
@@ -162,10 +165,9 @@ def delete_bookmark(bookmark_id: int):
         return
 
 
-
 #Tags
 
-@app.get("/tags", response_model = List[TagResponse])
+@app.get("/tags", response_model=List[TagResponse])
 def get_tags():
     with SessionLocal() as db:
         all_tags = db.execute(select(Tag)).scalars().all()
@@ -179,8 +181,9 @@ def get_bookmarks_by_tag(tag_name: str):
         if not tag_obj:
             return []
 
-        bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id, title=bookmark_obj.title, url=
-bookmark_obj.url, created_at=bookmark_obj.created_at, updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
+        bookmarks_by_tag = [BookmarkResponse(id=bookmark_obj.id,
+                                             title=bookmark_obj.title,
+                                             url=bookmark_obj.url,
+                                             created_at=bookmark_obj.created_at,
+                                             updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
         return bookmarks_by_tag
-
-
