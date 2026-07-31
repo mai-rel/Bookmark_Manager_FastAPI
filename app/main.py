@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
-from app.schemas import BookmarkCreate, BookmarkUpdate, BookmarkResponse, TagResponse, BookmarkWithTagsResponse
-from app.models import Bookmark, Tag
+from app.schemas import *
+from app.models import *
 from app.db import SessionLocal, init_db
 from typing import List
-from sqlalchemy import select
+from sqlalchemy import select, func, desc, distinct
 from sqlalchemy.orm import selectinload
 
 
@@ -20,7 +20,7 @@ def startup():
 
 #Bookmarks
 
-@app.post("/bookmarks", status_code=status.HTTP_201_CREATED)
+@app.post("/bookmarks", status_code=status.HTTP_201_CREATED, response_model=BookmarkWithTagsResponse)
 def create_bookmark(bookmark: BookmarkCreate):
     with SessionLocal() as db:
         existing = db.execute(select(Bookmark).where(Bookmark.url == str(bookmark.url))).scalar_one_or_none()
@@ -52,13 +52,10 @@ def create_bookmark(bookmark: BookmarkCreate):
         db.commit()
         db.refresh(db_bookmark)
 
-        tag_names = [tag_obj.name for tag_obj in db_bookmark.tags]
+        _ = db_bookmark.tags
 
-        response = BookmarkWithTagsResponse(id=db_bookmark.id, title=db_bookmark.title,
-                                            url=db_bookmark.url, tags=tag_names, created_at=db_bookmark.created_at,
-                                            updated_at=db_bookmark.updated_at)
+        return db_bookmark
 
-        return response
 
 
 @app.get("/bookmarks", response_model=List[BookmarkWithTagsResponse])
@@ -94,18 +91,8 @@ def get_bookmarks(query_title: str | None = None, query_tags: List[str] | None =
 
         bookmarks = db.execute(statement).scalars().all()
 
-        result = []
-        for bookmark in bookmarks:
-            tags_names = [tag_obj.name for tag_obj in bookmark.tags]
-            response = BookmarkWithTagsResponse(id=bookmark.id,
-                                                title=bookmark.title,
-                                                url=bookmark.url,
-                                                tags=tags_names,
-                                                created_at=bookmark.created_at,
-                                                updated_at=bookmark.updated_at)
-            result.append(response)
+        return bookmarks
 
-        return result
 
 
 @app.patch('/bookmarks/{bookmark_id}', status_code=status.HTTP_204_NO_CONTENT)
@@ -187,3 +174,55 @@ def get_bookmarks_by_tag(tag_name: str):
                                              created_at=bookmark_obj.created_at,
                                              updated_at=bookmark_obj.updated_at) for bookmark_obj in tag_obj.bookmarks]
         return bookmarks_by_tag
+
+
+# Other
+
+@app.get('/bookmarks/stats', response_model=StatsResponse)
+def get_bookmarks_stats():
+
+    response = {'bookmarks': 0,
+                'tags': 0,
+                'bookmarks_without_tags': 0,
+                'most_popular_tag': None,
+                'earliest_bookmark': None,
+                'latest_bookmark': None,
+                'avg_tags_per_bookmark': 0}
+
+    with SessionLocal() as db:
+        bookmarks_count = db.execute(select(func.count(Bookmark.id))).scalar_one()
+        response["bookmarks"] = bookmarks_count
+
+        tags_count = db.execute(select(func.count(Tag.id))).scalar_one()
+        response["tags"] = tags_count
+
+        bookmarks_no_tags_count = db.execute(select(func.count(Bookmark.id)).where(~Bookmark.tags.any())).scalar_one()
+        response["bookmarks_without_tags"] = bookmarks_no_tags_count
+
+        if tags_count:
+            top_tag_statement = (select(Tag.name)
+                         .join(bookmark_tags)
+                         .group_by(Tag.id, Tag.name)
+                         .order_by(desc(func.count(bookmark_tags.c.bookmark_id)), Tag.name)
+                         .limit(1))
+
+            top_tag_name = db.execute(top_tag_statement).scalar_one()
+            response['most_popular_tag'] = top_tag_name
+
+            avg_tags_statement = (select(func.count(bookmark_tags.c.tag_id) /
+                                          func.count(func.distinct(Bookmark.id)))
+                                          .select_from(Bookmark)
+                                          .outerjoin(bookmark_tags))
+
+            avg_tags = db.execute(avg_tags_statement).scalar_one()
+            response['avg_tags_per_bookmark'] = int(avg_tags)
+
+        if bookmarks_count:
+            bookmark_statement = select(Bookmark).options(selectinload(Bookmark.tags))
+            earliest_bookmark = db.execute(bookmark_statement.order_by(Bookmark.created_at, Bookmark.id).limit(1)).scalar_one()
+            latest_bookmark = db.execute(bookmark_statement.order_by(desc(Bookmark.created_at), desc(Bookmark.id)).limit(1)).scalar_one()
+
+            response["earliest_bookmark"] = earliest_bookmark
+            response["latest_bookmark"] = latest_bookmark
+
+        return response

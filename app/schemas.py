@@ -25,14 +25,27 @@ class BookmarkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class BookmarkWithTagsResponse(BookmarkResponse):
-    tags: List[str]
-
-
 class TagResponse(BaseModel):
     name: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BookmarkWithTagsResponse(BookmarkResponse):
+    tags: List[TagResponse]
+
+
+class StatsResponse(BaseModel):
+    bookmarks: int
+    tags: int
+    bookmarks_without_tags: int
+    most_popular_tag: str | None
+    earliest_bookmark: BookmarkWithTagsResponse| None
+    latest_bookmark: BookmarkWithTagsResponse| None
+    avg_tags_per_bookmark: int
+
+
+
 
 
 
