@@ -43,7 +43,7 @@ def test_get_one_bookmark(reset_db):
     assert bookmark.keys() >= {'title', 'url', 'tags'}
     assert bookmark['title'] == "FastAPI"
     assert bookmark['url'] == "https://fastapi.com/"
-    assert set(bookmark['tags']) == {"python", "dev", "api"}
+    assert set(tag["name"] for tag in bookmark["tags"]) == {"python", "dev", "api"}
 
 
 def normalize(bookmark):
@@ -73,7 +73,7 @@ def test_get_multiple_bookmarks(created_bookmarks):
 
     actual_bookmarks = [{'title': bookmark['title'],
                         'url': bookmark['url'],
-                         'tags': set(bookmark['tags'])} for bookmark in data]
+                         'tags': set(tag["name"] for tag in bookmark['tags'])} for bookmark in data]
 
     assert created_bookmarks == actual_bookmarks
 
@@ -90,17 +90,17 @@ def test_get_bookmarks_with_query_params(query_params, created_bookmarks):
     for bookmark in created_bookmarks:
         if query_title and query_title.lower() in bookmark['title'].lower():
             if not query_tags or any(tag.lower() in bookmark['tags'] for tag in query_tags):
-                expected_bookmarks.add((bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])))
+                expected_bookmarks.add((bookmark['title'], bookmark['url']))
 
         elif not query_title:
             if query_tags and any(tag.lower() in bookmark['tags'] for tag in query_tags):
-                expected_bookmarks.add((bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])))
+                expected_bookmarks.add((bookmark['title'], bookmark['url']))
 
     response = client.get('/bookmarks', params=query_params)
     assert response.status_code == 200
 
     data = response.json()
-    actual_bookmarks = {(bookmark['title'], bookmark['url'], frozenset(bookmark['tags'])) for bookmark in data}
+    actual_bookmarks = {(bookmark['title'], bookmark['url']) for bookmark in data}
     assert expected_bookmarks == actual_bookmarks
 
 

@@ -30,7 +30,7 @@ def test_create_bookmark_success_with_tags_or_without(reset_db, create_data):
     if "tags" not in create_data:
         assert data["tags"] == []
     else:
-        assert set(data["tags"]) == set(create_data["tags"])
+        assert {tag['name'] for tag in data["tags"]} == set(create_data["tags"])
 
     with SessionLocal() as db:
         bookmarks = db.execute(select(Bookmark)).scalars().all()
