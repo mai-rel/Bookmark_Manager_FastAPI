@@ -26,6 +26,9 @@ class Bookmark(Base):
         back_populates="bookmarks",
     )
 
+    user_id: Mapped[int| None] = mapped_column(ForeignKey("users.id"))
+    user: Mapped["User"] = relationship(back_populates="bookmarks")
+
 
 class Tag(Base):
     __tablename__ = "tags"
@@ -37,3 +40,15 @@ class Tag(Base):
         secondary=bookmark_tags,
         back_populates="tags",
     )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(unique=True)
+    email: Mapped[str] = mapped_column(unique=True)
+    hashed_password: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    bookmarks: Mapped[list["Bookmark"]] = relationship(back_populates="user")
